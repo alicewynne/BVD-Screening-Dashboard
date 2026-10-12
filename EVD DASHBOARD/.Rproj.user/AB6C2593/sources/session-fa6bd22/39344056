@@ -1,0 +1,26 @@
+{
+    "id": "39344056",
+    "path": "~/EVD 2026/EVD DASHBOARD/modules/mod_restricted_redflags.R",
+    "project_path": "modules/mod_restricted_redflags.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1780154626090.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "795,0",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1780692329,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1780692329589,
+    "read_only": false,
+    "read_only_alternatives": []
+}

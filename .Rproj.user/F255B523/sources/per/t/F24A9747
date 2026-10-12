@@ -1,0 +1,27 @@
+{
+    "id": "F24A9747",
+    "path": "~/Documents/GitHub/BVD-Screening-Dashboard/EVD DASHBOARD/modules/poe_daily_screening.R",
+    "project_path": "EVD DASHBOARD/modules/poe_daily_screening.R",
+    "type": "r_source",
+    "hash": "1686430188",
+    "contents": "",
+    "dirty": false,
+    "created": 1791107841099.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "31,0",
+        "scrollLine": "12"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1791109539,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1791109539597,
+    "read_only": false,
+    "read_only_alternatives": []
+}

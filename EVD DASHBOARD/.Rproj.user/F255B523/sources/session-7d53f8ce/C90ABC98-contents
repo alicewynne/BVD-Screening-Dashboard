@@ -1,0 +1,133 @@
+# ============================================================
+# Alert map
+# County map of alerts, filterable by state and county,
+# with a point for each alert's GPS location.
+#
+#
+# HOW TO ADD TO THE DASHBOARD
+#
+# 1. Save as modules/alert_map.R and set the settings below.
+#
+# 2. In app.r, before the ui is built:
+#       source("modules/alert_map.R")
+#
+#    In the UI, wherever the map should go:
+#       box(title = "Where alerts are coming from", width = 12,
+#           status = "primary", solidHeader = TRUE,
+#           alert_map_ui("alert_map"))
+#
+# 3. In the server:
+#    alert_map_server(
+#    "alert_map",
+#    alert_data        = reactive(alerts),
+#    selected_states   = reactive(input$state_filter),  # you'll need to change this to whatever you have named your county and state filters.
+#    selected_counties = reactive(input$county_filter)
+# )
+# ============================================================
+
+library(shiny)
+library(shinyWidgets)
+library(leaflet)
+library(sf)
+library(dplyr)
+
+# ---- Settings ----------------------------------------------
+
+states_map   <- readRDS("data/ssd_states.rds") %>% st_transform(4326)
+counties_map <- readRDS("data/ssd_counties.rds") %>% st_transform(4326)
+
+# Name columns in the boundary files
+STATE_COL  <- "ADM1_VIZ_N"   
+COUNTY_COL <- "ADM2_VIZ_N"   
+
+counties_map <- counties_map %>%
+  transmute(state = .data[[STATE_COL]], county = .data[[COUNTY_COL]])
+
+# Makes "Central_Equatoria" and "central equatoria" match
+clean_name <- function(x) gsub("[^a-z0-9]", "", tolower(x))
+
+# ---- UI ----------------------------------------------------
+
+alert_map_ui <- function(id) {
+  leafletOutput(NS(id, "map"), height = "600px")
+}
+
+# ---- Server ------------------------------------------------
+
+
+alert_map_server <- function(id, alert_data,
+                                 selected_states = reactive(NULL),
+                                 selected_counties = reactive(NULL)) {
+  moduleServer(id, function(input, output, session) {
+    
+    # Pull out the fields the map needs and tidy the names
+    alerts <- reactive({
+      raw <- alert_data()
+      tibble(
+        alert_id = raw[["alert_info/alert_id"]],
+        date     = as.Date(substr(raw[["alert_info/reporting_date"]], 1, 10)),
+        state    = raw[["alert_info/state"]],
+        county   = raw[["alert_info/county"]],
+        village  = raw[["alert_info/village"]],
+        lat      = as.numeric(raw[["alert_info/_gps_location_latitude"]]),
+        lon      = as.numeric(raw[["alert_info/_gps_location_longitude"]])
+      ) %>%
+        mutate(
+          # use the boundary file spelling of the state/county
+          state  = counties_map$state[match(clean_name(state), clean_name(counties_map$state))],
+          county = counties_map$county[match(clean_name(county), clean_name(counties_map$county))]
+        )
+    })
+    
+    # Counties to draw: those in the dashboard's selected state(s)/county(ies).
+    # Nothing selected = all counties.
+    shown_counties <- reactive({
+      st <- selected_states()
+      co <- selected_counties()
+      counties_map %>%
+        filter(length(st) == 0 | clean_name(state) %in% clean_name(st),
+               length(co) == 0 | clean_name(county) %in% clean_name(co))
+    })
+    
+    shown_alerts <- reactive({
+      alerts() %>% filter(county %in% shown_counties()$county)
+    })
+    
+    output$map <- renderLeaflet({
+      shapes <- shown_counties() %>%
+        left_join(count(shown_alerts(), county, name = "alerts"), by = "county") %>%
+        mutate(alerts = coalesce(alerts, 0L))
+      
+      # grey for 0, then yellow -> dark red
+      pal <- colorBin(c("#eeeeee", "#fed976", "#fd8d3c", "#e31a1c", "#800026"),
+                      domain = shapes$alerts,
+                      bins = c(0, 1, 5, 10, 25, Inf), right = FALSE)
+      
+      points <- shown_alerts() %>% filter(!is.na(lat), !is.na(lon), lat != 0)
+      box <- st_bbox(shapes)
+      
+      leaflet() %>%
+        addProviderTiles(providers$CartoDB.Positron) %>%
+        addPolygons(
+          data = shapes,
+          fillColor = ~pal(alerts), fillOpacity = 0.8,
+          color = "white", weight = 1,
+          label = ~paste0(county, ", ", state, ": ", alerts, " alert(s)"),
+          highlightOptions = highlightOptions(weight = 3, color = "#333333")
+        ) %>%
+        addPolylines(data = states_map, color = "#003b6f", weight = 2) %>%
+        addCircleMarkers(
+          data = points, lng = ~lon, lat = ~lat,
+          radius = 5, color = "white", weight = 1,
+          fillColor = "#003b6f", fillOpacity = 0.9,
+          popup = ~paste0("<b>Alert ID:</b> ", alert_id,
+                          "<br><b>Date:</b> ", format(date, "%d %b %Y"),
+                          "<br><b>Location:</b> ", village, ", ", county, ", ", state)
+        ) %>%
+        addLegend("bottomright", pal = pal, values = shapes$alerts,
+                  title = "Alerts per county", opacity = 0.9,
+                  labFormat = function(type, cuts, p) c("0", "1-4", "5-9", "10-24", "25+")) %>%
+        fitBounds(box[["xmin"]], box[["ymin"]], box[["xmax"]], box[["ymax"]])
+    })
+  })
+}

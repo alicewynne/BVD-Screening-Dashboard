@@ -1,0 +1,26 @@
+{
+    "id": "F7F2011A",
+    "path": "~/Documents/GitHub/BVD-Screening-Dashboard/EVD DASHBOARD/modules/jia_screening.R",
+    "project_path": "modules/jia_screening.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1791201186217.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "797,125",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1791478327,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1791478327814,
+    "read_only": false,
+    "read_only_alternatives": []
+}

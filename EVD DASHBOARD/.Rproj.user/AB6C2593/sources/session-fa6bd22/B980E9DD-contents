@@ -1,0 +1,147 @@
+# ============================================================
+# MODULE: ALERT CLEARANCE / FOLLOW-UP LOG
+# File: modules/mod_alert_clearance.R
+# Purpose:
+#   - Allow approved health officers to classify alert records after review
+#   - Store reviewed/cleared/discarded screening IDs in a CSV log
+#   - Return reviewed IDs so active alert counts exclude discarded/cleared alerts
+#   - Preserve reviewed records in the screened-traveler denominator
+# ============================================================
+
+mod_alert_clearance_server <- function(
+    id,
+    clearance_file = "alert_clearance_log.csv"
+) {
+  moduleServer(id, function(input, output, session) {
+    
+    empty_clearance_log <- function() {
+      tibble::tibble(
+        screening_id = character(),
+        cleared_at = character(),
+        cleared_by = character(),
+        clearance_action = character(),
+        case_definition_met = character(),
+        followup_required = character(),
+        clearance_note = character()
+      )
+    }
+    
+    ensure_clearance_file <- function() {
+      if (!file.exists(clearance_file)) {
+        readr::write_csv(empty_clearance_log(), clearance_file)
+      }
+    }
+    
+    read_clearance_log <- function() {
+      ensure_clearance_file()
+      
+      out <- tryCatch(
+        readr::read_csv(clearance_file, show_col_types = FALSE),
+        error = function(e) {
+          message("Could not read alert clearance log: ", conditionMessage(e))
+          empty_clearance_log()
+        }
+      )
+      
+      required_cols <- names(empty_clearance_log())
+      missing_cols <- setdiff(required_cols, names(out))
+      if (length(missing_cols) > 0) {
+        for (nm in missing_cols) out[[nm]] <- ""
+      }
+      
+      out %>%
+        dplyr::mutate(
+          screening_id = as.character(screening_id),
+          cleared_at = as.character(cleared_at),
+          cleared_by = as.character(cleared_by),
+          clearance_action = as.character(clearance_action),
+          case_definition_met = as.character(case_definition_met),
+          followup_required = as.character(followup_required),
+          clearance_note = as.character(clearance_note)
+        ) %>%
+        dplyr::filter(!is.na(screening_id), screening_id != "") %>%
+        dplyr::arrange(dplyr::desc(cleared_at)) %>%
+        dplyr::distinct(screening_id, .keep_all = TRUE) %>%
+        dplyr::select(dplyr::all_of(required_cols))
+    }
+    
+    clearance_log <- reactiveVal(read_clearance_log())
+    
+    cleared_ids <- reactive({
+      clearance_log() %>%
+        dplyr::pull(screening_id) %>%
+        unique()
+    })
+    
+    mark_alerts_cleared <- function(
+    screening_ids,
+    cleared_by,
+    note = "",
+    clearance_action = "Reviewed - discarded / does not meet EVD alert definition",
+    case_definition_met = "No",
+    followup_required = "No"
+    ) {
+      ensure_clearance_file()
+      
+      screening_ids <- unique(as.character(screening_ids))
+      screening_ids <- screening_ids[!is.na(screening_ids) & screening_ids != ""]
+      
+      if (length(screening_ids) == 0) return(invisible(FALSE))
+      
+      old_log <- read_clearance_log()
+      
+      new_log <- tibble::tibble(
+        screening_id = screening_ids,
+        cleared_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+        cleared_by = as.character(cleared_by),
+        clearance_action = as.character(clearance_action),
+        case_definition_met = as.character(case_definition_met),
+        followup_required = as.character(followup_required),
+        clearance_note = as.character(note)
+      )
+      
+      updated_log <- dplyr::bind_rows(old_log, new_log) %>%
+        dplyr::arrange(dplyr::desc(cleared_at)) %>%
+        dplyr::distinct(screening_id, .keep_all = TRUE)
+      
+      write_ok <- tryCatch({
+        readr::write_csv(updated_log, clearance_file)
+        TRUE
+      }, error = function(e) {
+        message("Could not write alert clearance log: ", conditionMessage(e))
+        FALSE
+      })
+      
+      if (isTRUE(write_ok)) clearance_log(updated_log)
+      invisible(write_ok)
+    }
+    
+    restore_alerts <- function(screening_ids) {
+      screening_ids <- unique(as.character(screening_ids))
+      screening_ids <- screening_ids[!is.na(screening_ids) & screening_ids != ""]
+      
+      if (length(screening_ids) == 0) return(invisible(FALSE))
+      
+      old_log <- read_clearance_log()
+      updated_log <- old_log %>% dplyr::filter(!screening_id %in% screening_ids)
+      
+      write_ok <- tryCatch({
+        readr::write_csv(updated_log, clearance_file)
+        TRUE
+      }, error = function(e) {
+        message("Could not update alert clearance log: ", conditionMessage(e))
+        FALSE
+      })
+      
+      if (isTRUE(write_ok)) clearance_log(updated_log)
+      invisible(write_ok)
+    }
+    
+    list(
+      clearance_log = clearance_log,
+      cleared_ids = cleared_ids,
+      mark_alerts_cleared = mark_alerts_cleared,
+      restore_alerts = restore_alerts
+    )
+  })
+}
